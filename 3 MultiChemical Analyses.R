@@ -155,6 +155,7 @@ outcomes.list <- list(chest_area = "Chest area",
 expcovout <- read.csv("J:\\StevensLab\\The HPP3D Study\\HPP3D Phthalates and Cardiac_DRS\\Analysis\\Derived_data\\Imputed HPP Cardiac Dataset.csv")
 expcovout$clinicsite <- as.factor(expcovout$clinicsite)
 
+
 ############################
 ## Quantile g-computation ##
 ############################
@@ -1837,4 +1838,129 @@ run_outcome_models <- function(outcome_name, outcome_label){
 for (out in names(outcomes.list)) {
   run_outcome_models(out, outcomes.list[[out]])
 }
+
+
+
+
+
+###########################################
+## Sensitivity analysis: Diabetes status ##
+###########################################
+
+
+## First examine the n for diabetes ##
+limit <- subset(expcovout, expcovout$.imp == 0)
+limit <- limit %>% group_by(record) %>% filter(row_number() == 1) %>% ungroup()
+
+table(limit$history_mom, limit$endo_dm1, useNA = "always") 
+table(limit$history_mom, limit$endo_dm2, useNA = "always") 
+
+limit$ppg_dm <- ifelse(limit$history_mom == 0, 0,
+                       ifelse(limit$endo_dm1 == 1, 1, 0))
+limit$ppg_dm[limit$endo_dm2 == 1] <- 1
+table(limit$ppg_dm, useNA = "always")  #n=4 cases of diabetes in our sample. n=3 missing diabetes status entirely. Will exclude those participants as well, just in case
+
+
+## Next, will subset to those without diabetes, n=288
+limit <- subset(limit[,c("record", "ppg_dm")], limit$ppg_dm == 0) 
+mymids <- merge(limit, expcovout, by.x = "record")
+table(mymids$ppg_dm) # Check that only those without ppg diabetes included
+
+## Limit to imputed data for analysis
+mymids <- subset(mymids, mymids$.imp > 0)
+
+
+
+####
+#### Function for models
+#### 
+
+myqgcompmod <- function(out, covs, exps, mod.description, data){
+  qgformula <- reformulate(c(exps, covs), response = out)
+  
+  qg.fit.imp <- list(
+    analyses = lapply(1:imp.length, function(x) {
+      dat <- data[data$.imp==x, ]
+      qgcomp.boot(f = qgformula,
+                  expnms = exps,
+                  family = gaussian(),
+                  id="record",
+                  q = NULL,
+                  bayes = TRUE,
+                  seed = 125,
+                  data = dat)
+    })
+  )
+  
+  qg.psi <- MIcombinevals(MIcombine(qg.fit.imp$analyses), 3, mod.description)
+  qg.psi
+}
+
+## Quick test of function::: ##
+# Outcome & exposure filtering
+mymids2 <- subset(mymids, !is.na(mymids[['cardiothoracic_ratio']]))
+mymids2 <- mymids2[complete.cases(mymids2[explist_iqr]), ]
+mymids2 <- mymids2[order(mymids2$.imp, mymids2$record, mymids2$ga_us),]
+
+# Relevant info for analysis
+num_vis <- nrow(mymids2)/imp.length
+n <- length(unique(mymids2$record))
+n.numvis <- str_c(n, ", ",num_vis)
+
+# Test
+adj.phth   <- myqgcompmod('cardiothoracic_ratio', covlist, explist_iqr_pht, paste("Adjusted model for phthalates,", 'Cardiothoracic ratio'), mymids2)
+
+
+
+
+####
+#### Wrapper to run across exposures and outcomes
+####
+
+run_outcome_models <- function(outcome_name, outcome_label){
+  
+  # Outcome & exposure filtering
+  mymids2 <- subset(mymids, !is.na(mymids[[outcome_name]]))
+  mymids2 <- mymids2[complete.cases(mymids2[explist_iqr]), ]
+  mymids2 <- mymids2[order(mymids2$.imp, mymids2$record, mymids2$ga_us),]
+  
+  ## Relevant info for analysis
+  num_vis <- nrow(mymids2)/imp.length
+  n <- length(unique(mymids2$record))
+  n.numvis <- str_c(n, ", ",num_vis)
+  
+  ## Run models - Preg Average exposure
+  unadj.all <- myqgcompmod(outcome_name, unadj.covlist, explist_iqr, paste("Unadjusted model for all,", outcome_label), mymids2)
+  adj.all   <- myqgcompmod(outcome_name, covlist, explist_iqr, paste("Adjusted model for all,", outcome_label), mymids2)
+  
+  unadj.phth <- myqgcompmod(outcome_name, unadj.covlist, explist_iqr_pht, paste("Unadjusted model for phthalates,", outcome_label), mymids2)
+  adj.phth   <- myqgcompmod(outcome_name, covlist, explist_iqr_pht, paste("Adjusted model for phthalates,", outcome_label), mymids2)
+  
+  unadj.lmw <- myqgcompmod(outcome_name, unadj.covlist, explist_iqr_lmw, paste("Unadjusted model for LMWP,", outcome_label), mymids2)
+  adj.lmw   <- myqgcompmod(outcome_name, covlist, explist_iqr_lmw, paste("Adjusted model for LMWP,", outcome_label), mymids2)
+  
+  unadj.hmw <- myqgcompmod(outcome_name, unadj.covlist, explist_iqr_hmw, paste("Unadjusted model for HMWP,", outcome_label), mymids2)
+  adj.hmw   <- myqgcompmod(outcome_name, covlist, explist_iqr_hmw, paste("Adjusted model for HMWP,", outcome_label), mymids2)
+  
+  unadj.alt <- myqgcompmod(outcome_name, unadj.covlist, explist_iqr_alt, paste("Unadjusted model for alternatives,", outcome_label), mymids2)
+  adj.alt   <- myqgcompmod(outcome_name, covlist, explist_iqr_alt, paste("Adjusted model for alternatives,", outcome_label), mymids2)
+  
+  ## Combine results
+  combine.results <- cbind(n.numvis,
+                           rbind(unadj.all, adj.all, 
+                                 unadj.phth, adj.phth, unadj.lmw, adj.lmw, 
+                                 unadj.hmw, adj.hmw, unadj.alt, adj.alt))
+  
+  ## Save to CSV
+  out_file <- paste0("J:/StevensLab/The HPP3D Study/HPP3D Phthalates and Cardiac_DRS/Analysis/Results/Sensitivity Analysis for NonDiabetics ", 
+                     gsub(" ", "_", outcome_label), "_From_QGCOMP.csv")
+  write.csv(combine.results, file = out_file)
+}
+
+# Loop through outcomes in outcomes.list
+for (out in names(outcomes.list)) {
+  run_outcome_models(out, outcomes.list[[out]])
+}
+
+
 
