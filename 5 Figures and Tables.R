@@ -465,6 +465,43 @@ write.csv(merged_results, "Adjusted Results Sensitivity Analysis CC Analysis.csv
 
 
 
+##################################
+##  Non-Diabetics analysis      ##
+## This is sensitivity analysis ##
+##################################
+readindata <- function(unadj.adj, outcome_label){
+  mchem <- read.csv(paste0("Sensitivity Analysis for NonDiabetics ", gsub(" ", "_", outcome_label), "_From_QGCOMP.csv"))
+  
+  adj.mchem <- mchem[grep(unadj.adj, mchem$outcome), ]
+  adj.mchem <- tidyr::separate(data = adj.mchem, col = outcome, into = c("Description", "Outcome"), sep="\\,")
+  
+  adj.mchem$name <- ifelse(grepl("all", adj.mchem$Description), "Overall Mixture",
+                           ifelse(grepl("phthalates", adj.mchem$Description), "Phthalate Mixture", 
+                                  ifelse(grepl("LMW", adj.mchem$Description), "LMW Mixture",
+                                         ifelse(grepl("HMW", adj.mchem$Description), "HMW Mixture", "Replacement Mixture"))))
+  
+  estdat <- t(adj.mchem[, c('name', 'estci')])
+  estdat <- janitor::row_to_names(estdat, row_number=1)
+  
+  outname <- data.frame('n.numvis' = adj.mchem[1,'n.numvis'],
+                        estdat)
+  return(outname)
+}
+
+
+## Adjusted models ##
+merged_results <- dplyr::bind_rows(
+  lapply(names(outcomes.list), function(out) {
+    df <- readindata("Adjusted", outcomes.list[[out]])
+    df$outcome <- outcomes.list[[out]]  
+    return(df)
+  })
+)
+head(merged_results)   
+write.csv(merged_results, "Adjusted Results Sensitivity Analysis ND Analysis.csv")
+
+
+
 
 
 
@@ -520,7 +557,9 @@ merged_results$Ventricle <- ifelse(merged_results$ventricle == "LV", "Left Ventr
 #### Figure 1a: Plot for CRT 
 ####
 cardiothoracic_ratio = subset(merged_results, merged_results$Outcome == "Cardiothoracic ratio")
+cardiothoracic_ratio$Label = "Cardiothoracic Ratio"
 crt.adj.beta.plot <- ggplot(cardiothoracic_ratio, aes(x=as.numeric(est), xmin=as.numeric(lcl), xmax=as.numeric(ucl), y=name, col="black")) +
+  facet_wrap(~Label) + 
   geom_point(col="black") +
   geom_errorbar(width=0.2, position=position_dodge(width=0.5), col="black") +
   geom_vline(xintercept=(0), linetype="dashed", color="grey57") +
@@ -531,7 +570,7 @@ crt.adj.beta.plot <- ggplot(cardiothoracic_ratio, aes(x=as.numeric(est), xmin=as
                    limits = rev(c('LMW Mixture',
                                   'HMW Mixture',
                                   'Replacement Mixture'))) +
-  theme(text = element_text(size=19, color="black"),
+  theme(text = element_text(size=24, color="black"), strip.text = element_text(size=24, face="bold"), 
         legend.position = "none")
 crt.adj.beta.plot
 
@@ -540,7 +579,9 @@ crt.adj.beta.plot
 #### Figure 1b: Plot for Chest and Heart Areas
 ####
 chestheart = subset(merged_results, merged_results$Outcome == "Chest area (z-scored)" | merged_results$Outcome == "Heart area (z-scored)" )
+chestheart$Label = "Chest and Heart Area"
 chestheart.adj.beta.plot <- ggplot(chestheart, aes(x=as.numeric(est), xmin=as.numeric(lcl), xmax=as.numeric(ucl), y=name, shape=Outcome, col="black")) +
+  facet_wrap(~Label) +
   geom_point(size=3, col="black", position=position_dodge(width=0.5)) +
   geom_errorbar(width=0.2, col="black", position=position_dodge(width=0.5)) +
   geom_vline(xintercept=(0), linetype="dashed", color="grey57") +
@@ -552,7 +593,7 @@ chestheart.adj.beta.plot <- ggplot(chestheart, aes(x=as.numeric(est), xmin=as.nu
                                   'HMW Mixture',
                                   'Replacement Mixture'))) +
   scale_shape_manual(values=c(18,8), name='Outcome', guide = guide_legend(title=" ", reverse = TRUE)) +
-  theme(text = element_text(size=19, color="black"),
+  theme(text = element_text(size=24, color="black"), strip.text = element_text(size=24, face="bold"), 
         legend.position = "right")
 chestheart.adj.beta.plot
 
@@ -565,7 +606,7 @@ chestheart.adj.beta.plot
 #### Plot for inlet length
 ####
 il = subset(merged_results, merged_results$rest == "inlet length (z-scored)")
-il$Label = "Inlet Length (z-scored)"
+il$Label = "Inlet Length"
 il.adj.beta.plot <-  ggplot(il, aes(x=as.numeric(est), xmin=as.numeric(lcl), xmax=as.numeric(ucl), y=name, col="black", shape=Ventricle)) +
   facet_wrap(~Label) + 
   geom_point(size=3, col="black", position=position_dodge(width=0.5)) +
@@ -579,7 +620,8 @@ il.adj.beta.plot <-  ggplot(il, aes(x=as.numeric(est), xmin=as.numeric(lcl), xma
                                   'HMW Mixture',
                                   'Replacement Mixture'))) +
   scale_shape_manual(values=c(17,15),name='Ventricle', guide = guide_legend(title=" ", reverse = TRUE)) +
-  theme(text = element_text(size=19, color="black"),
+  theme(text = element_text(size=24, color="black"),
+        strip.text = element_text(size=24, face="bold"),
         legend.position = "none")
 il.adj.beta.plot
 
@@ -588,7 +630,7 @@ il.adj.beta.plot
 #### Plot for Annulus Displacement
 ####
 ad = subset(merged_results, merged_results$rest == "annulus displacement")
-ad$Label = "Annulus Displacement (z-score)"
+ad$Label = "Annulus Displacement"
 ad.adj.beta.plot <-  ggplot(ad, aes(x=as.numeric(est), xmin=as.numeric(lcl), xmax=as.numeric(ucl), y=name, col="black", shape=Ventricle)) +
   facet_wrap(~Label) + 
   geom_point(size=3, col="black", position=position_dodge(width=0.5)) +
@@ -602,7 +644,7 @@ ad.adj.beta.plot <-  ggplot(ad, aes(x=as.numeric(est), xmin=as.numeric(lcl), xma
                                   'HMW Mixture',
                                   'Replacement Mixture'))) +
   scale_shape_manual(values=c(17,15),name='Ventricle', guide = guide_legend(title=" ", reverse = TRUE)) +
-  theme(text = element_text(size=19, color="black"),
+  theme(text = element_text(size=24, color="black"), strip.text = element_text(size=24, face="bold"), 
         legend.position = "none")
 ad.adj.beta.plot
 
@@ -624,7 +666,7 @@ fs.adj.beta.plot <-  ggplot(fs, aes(x=as.numeric(est), xmin=as.numeric(lcl), xma
                                   'HMW Mixture',
                                   'Replacement Mixture'))) +
   scale_shape_manual(values=c(17,15),name='Ventricle', guide = guide_legend(title=" ", reverse = TRUE)) +
-  theme(text = element_text(size=19, color="black"),
+  theme(text = element_text(size=24, color="black"), strip.text = element_text(size=24, face="bold"), 
         legend.position = "none")
 fs.adj.beta.plot
 
@@ -646,7 +688,7 @@ mpi.adj.beta.plot <-  ggplot(mpi, aes(x=as.numeric(est), xmin=as.numeric(lcl), x
                                   'HMW Mixture',
                                   'Replacement Mixture'))) +
   scale_shape_manual(values=c(17,15),name='Ventricle', guide = guide_legend(title=" ", reverse = TRUE)) +
-  theme(text = element_text(size=19, color="black"),
+  theme(text = element_text(size=24, color="black"), strip.text = element_text(size=24, face="bold"), 
         legend.position = "none")
 mpi.adj.beta.plot
 
@@ -670,7 +712,7 @@ ea.adj.beta.plot <-  ggplot(ea, aes(x=as.numeric(est), xmin=as.numeric(lcl), xma
                                   'HMW Mixture',
                                   'Replacement Mixture'))) +
   scale_shape_manual(values=c(17,15),name='Ventricle', guide = guide_legend(title=" ", reverse = TRUE)) +
-  theme(text = element_text(size=19, color="black"),
+  theme(text = element_text(size=24, color="black"), strip.text = element_text(size=24, face="bold"), 
         legend.position = "right")
 ea.adj.beta.plot
 
@@ -688,7 +730,7 @@ combo.plot <- plot_grid(crt.adj.beta.plot + theme(plot.margin = unit(c(0.5, 1, 0
                         label_size = 20)
 combo.plot <- ggdraw(add_sub(combo.plot, "Average difference (95% CI) \nfor IQR increase in concentrations", size=20,
                              vpadding=grid::unit(0.5,"lines")))
-ggsave(combo.plot, filename="Primary results for CRT and its derivatives.jpg", width = 12, height = 6, units = "in", dpi=900)
+ggsave(combo.plot, filename="Primary results for CRT and its derivatives.jpg", width = 15, height = 6, units = "in", dpi=900)
 
 
 ####
@@ -728,7 +770,7 @@ mpi.adj.beta.plot <-  ggplot(mpi, aes(x=as.numeric(est), xmin=as.numeric(lcl), x
                                   'HMW Mixture',
                                   'Replacement Mixture'))) +
   scale_shape_manual(values=c(17,15),name='Ventricle', guide = guide_legend(title=" ", reverse = TRUE)) +
-  theme(text = element_text(size=19, color="black"),
+  theme(text = element_text(size=24, color="black"), strip.text = element_text(size=24, face="bold"), 
         legend.position = "right")
 mpi.adj.beta.plot
 
@@ -737,7 +779,7 @@ combo.plot <- plot_grid(il.adj.beta.plot + theme(plot.margin = unit(c(0.5, 1, 0.
                         fs.adj.beta.plot + theme(plot.margin = unit(c(0.5, 1, 0.5, 1), "cm"), axis.title.y=element_blank(), axis.text.y=element_blank(), axis.ticks.y=element_blank()),
                         mpi.adj.beta.plot + theme(plot.margin = unit(c(0.5, 0.5, 0.5, 1), "cm"), axis.title.y=element_blank(), axis.text.y=element_blank(), axis.ticks.y=element_blank()),
                         labels = c('A','B','C','D'),
-                        rel_widths = c(0.29,0.2,0.2,0.29),
+                        rel_widths = c(0.31,0.2,0.2,0.29),
                         ncol=4,
                         label_size = 20)
 combo.plot <- ggdraw(add_sub(combo.plot, "Average difference (95% CI) \nfor IQR increase in concentrations", size=20,
@@ -775,7 +817,7 @@ ea.adj.beta.plot <-  ggplot(ea, aes(x=as.numeric(est), xmin=as.numeric(lcl), xma
                                   'HMW Mixture',
                                   'Replacement Mixture'))) +
   scale_shape_manual(values=c(17,15),name='ventricle', guide = guide_legend(title=" ", reverse = TRUE)) +
-  theme(text = element_text(size=19, color="black"),
+  theme(text = element_text(size=24, color="black"), strip.text = element_text(size=24, face="bold"), 
         legend.position = "none")
 ea.adj.beta.plot
 
@@ -798,7 +840,7 @@ e.adj.beta.plot <-  ggplot(ea, aes(x=as.numeric(est), xmin=as.numeric(lcl), xmax
                                   'HMW Mixture',
                                   'Replacement Mixture'))) +
   scale_shape_manual(values=c(17,15),name='ventricle', guide = guide_legend(title=" ", reverse = TRUE)) +
-  theme(text = element_text(size=19, color="black"),
+  theme(text = element_text(size=24, color="black"), strip.text = element_text(size=24, face="bold"), 
         legend.position = "none")
 e.adj.beta.plot
 
@@ -821,7 +863,7 @@ a.adj.beta.plot <-  ggplot(ea, aes(x=as.numeric(est), xmin=as.numeric(lcl), xmax
                                   'HMW Mixture',
                                   'Replacement Mixture'))) +
   scale_shape_manual(values=c(17,15),name='ventricle', guide = guide_legend(title=" ", reverse = TRUE)) +
-  theme(text = element_text(size=19, color="black"),
+  theme(text = element_text(size=24, color="black"), strip.text = element_text(size=24, face="bold"), 
         legend.position = "right")
 a.adj.beta.plot
 
@@ -833,7 +875,7 @@ combo.plot <- plot_grid(ea.adj.beta.plot + theme(plot.margin = unit(c(0.5, 1, 0.
                         e.adj.beta.plot + theme(plot.margin = unit(c(0.5, 1, 0.5, 1), "cm"), axis.title.y=element_blank(), axis.text.y=element_blank(), axis.ticks.y=element_blank()),
                         a.adj.beta.plot + theme(plot.margin = unit(c(0.5, 0.5, 0.5, 1), "cm"), axis.title.y=element_blank(), axis.text.y=element_blank(), axis.ticks.y=element_blank()),
                         labels = c('A','B','C'),
-                        rel_widths = c(0.31,0.24,0.28),
+                        rel_widths = c(0.31,0.22,0.28),
                         ncol=3,
                         label_size = 20)
 combo.plot <- ggdraw(add_sub(combo.plot, "Average difference (95% CI) \nfor IQR increase in concentrations", size=20,
@@ -916,7 +958,7 @@ adj.pred.plot <- ggplot(out.tab.pred, aes(x=name, ymin=as.numeric(ll.simul), yma
        title="") +
   scale_x_discrete(labels=label_wrap(10))+
   scale_shape_manual(values=c(1,19), guide = guide_legend(title="Quartile", reverse = TRUE)) +
-  theme(text = element_text(size=19, color="black"),
+  theme(text = element_text(size=24, color="black"), strip.text = element_text(size=24, face="bold"), 
         #        axis.text.x = element_text(angle=45),
         plot.title.position = "plot")
 adj.pred.plot
@@ -946,7 +988,7 @@ crt.adj.pred.plot <- ggplot(crt, aes(x=name, ymin=as.numeric(ll.simul), ymax=as.
        title="") +
   scale_x_discrete(labels=label_wrap(10))+
   scale_shape_manual(values=c(1,19), guide = guide_legend(title="Quartile", reverse = TRUE)) +
-  theme(text = element_text(size=19, color="black"),
+  theme(text = element_text(size=24, color="black"), strip.text = element_text(size=24, face="bold"), 
         #        axis.text.x = element_text(angle=45),
         plot.title.position = "plot")
 crt.adj.pred.plot
